@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "660777857471",
+    "project_id": "bct-stock",
+    "storage_bucket": "bct-stock.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:660777857471:android:b4a9739e1935014e93710a",
+        "android_client_info": {
+          "package_name": "com.example.bericot"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDq5diGdnQUjFdJVwRuZg-KBzI216QMZ6w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
