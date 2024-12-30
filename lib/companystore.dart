@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore package
 import 'excel.dart';
 import 'stock.dart';
 
-class StockScreen extends StatefulWidget { 
-    final String assetType; 
-    const StockScreen({required this.assetType, super.key}); 
+class StockScreen extends StatefulWidget {
+  final String assetType;
+  const StockScreen({required this.assetType, super.key});
 
-@override 
-_StockScreenState createState() => _StockScreenState(); 
-} 
+  @override
+  _StockScreenState createState() => _StockScreenState();
+}
 
 class _StockScreenState extends State<StockScreen> {
-   String? selectedStore;
-  List<Stock> stockList = [];
+  String? selectedStore;
 
   List<DropdownMenuItem<String>> get items {
     return const [
@@ -25,8 +25,8 @@ class _StockScreenState extends State<StockScreen> {
   void _showAddStockDialog(BuildContext context) {
     final nameController = TextEditingController();
     final unitsController = TextEditingController();
-    final quantityController = TextEditingController();     
-    final rateController = TextEditingController(); 
+    final quantityController = TextEditingController();
+    final rateController = TextEditingController();
     showDialog(
       context: context,
       builder: (context) {
@@ -39,7 +39,7 @@ class _StockScreenState extends State<StockScreen> {
                 controller: nameController,
                 decoration: const InputDecoration(labelText: 'Item Name'),
               ),
-              TextField( 
+              TextField(
                 controller: quantityController,
                 decoration: const InputDecoration(labelText: 'Quantity'),
                 keyboardType: TextInputType.number,
@@ -89,24 +89,22 @@ class _StockScreenState extends State<StockScreen> {
 
   void _addStock(String name, int quantity, int units, double rate, String store) {
     if (name.isNotEmpty && quantity > 0 && rate > 0) {
-      final stock = Stock(
-        name: name,
-        quantity: quantity,
-        units: units,
-        rate: rate,
-        store: store,
-      );
-      setState(() {
-        stockList.add(stock);
-      });
+      final stockData = {
+        'name': name,
+        'quantity': quantity,
+        'units': units,
+        'rate': rate,
+        'store': store,
+      };
+      FirebaseFirestore.instance.collection('products').add(stockData);
     }
   }
 
-  void _showEditStockDialog(BuildContext context, Stock stock, int index) {
-    final nameController = TextEditingController(text: stock.name);
-    final unitsController = TextEditingController(text: stock.units.toString());
-    final quantityController = TextEditingController(text: stock.quantity.toString());     
-    final rateController = TextEditingController(text: stock.rate.toString()); 
+  void _showEditStockDialog(BuildContext context, DocumentSnapshot stock) {
+    final nameController = TextEditingController(text: stock['name']);
+    final unitsController = TextEditingController(text: stock['units'].toString());
+    final quantityController = TextEditingController(text: stock['quantity'].toString());
+    final rateController = TextEditingController(text: stock['rate'].toString());
 
     showDialog(
       context: context,
@@ -150,15 +148,12 @@ class _StockScreenState extends State<StockScreen> {
                 final rate = double.tryParse(rateController.text) ?? 0.0;
 
                 if (name.isNotEmpty && quantity > 0 && rate > 0) {
-                  setState(() {
-                    stockList[index] = Stock(
-                      name: name,
-                      quantity: quantity,
-                      units: units,
-                      rate: rate,
-                      store: stock.store, // Keep the same store
-                    );
-                  });
+                  FirebaseFirestore.instance.collection('products').doc(stock.id).update({
+                  'name': name,
+                  'quantity': quantity,
+                  'units': units,
+                  'rate': rate,
+              });
                   Navigator.of(context).pop();
                 }
               },
@@ -170,7 +165,7 @@ class _StockScreenState extends State<StockScreen> {
     );
   }
 
-  void _showDeleteConfirmationDialog(BuildContext context, int index) {
+void _showDeleteConfirmationDialog(BuildContext context, String documentId) {
     showDialog(
       context: context,
       builder: (context) {
@@ -184,9 +179,7 @@ class _StockScreenState extends State<StockScreen> {
             ),
             TextButton(
               onPressed: () {
-                setState(() {
-                  stockList.removeAt(index);
-                });
+                FirebaseFirestore.instance.collection('products').doc(documentId).delete(); // Change this line
                 Navigator.of(context).pop();
               },
               child: const Text('Delete'),
@@ -195,7 +188,7 @@ class _StockScreenState extends State<StockScreen> {
         );
       },
     );
-  }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -261,44 +254,72 @@ class _StockScreenState extends State<StockScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 16),            
             Expanded(
-              child: stockList.isEmpty
-                  ? const Center(child: Text("No stock available."))
-                  : ListView.builder(
-                      itemCount: stockList.length,
-                      itemBuilder: (context, index) {
-                        final stock = stockList[index];
-                        if (selectedStore == null || stock.store == selectedStore) {
-                          return Card(
-                            child: ListTile(
-                              title: Text(stock.name),
-                              subtitle: Text('Units: ${stock.units} | Unit Price: ${stock.rate} UGX'),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit),
-                                    onPressed: () => _showEditStockDialog(context, stock, index),
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance.collection('products').snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return const Center(child: Text("Loading..."));
+                  var products = snapshot.data!.docs;
+
+                  return products.isEmpty
+                      ? const Center(child: Text("No stock available."))
+                      : ListView.builder(
+                          itemCount: products.length,
+                          itemBuilder: (context, index) {
+                            var product = products[index];
+                            if (selectedStore == null || product['store'] == selectedStore) {
+                              return Card(
+                                child: ListTile(
+                                  title: Text(product['name']),
+                                  subtitle: Text('Units: ${product['units']} | Unit Price: ${product['rate']} UGX'),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.edit),
+                                        onPressed: () => _showEditStockDialog(context, product), // Pass the document
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete),
+                                        onPressed: () => _showDeleteConfirmationDialog(context, product.id), // Pass the document ID
+                                      ),
+                                      Text('Total: ${(product['units'] * product['rate']).toStringAsFixed(2)} UGX'),
+                                    ],
                                   ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete),
-                                    onPressed: () => _showDeleteConfirmationDialog(context, index),
-                                  ),
-                                  Text('Total: ${stock.totalPrice.toStringAsFixed(2)} UGX'),
-                                ],
-                              ),
-                            ),
-                          );
-                        }
-                        return const SizedBox.shrink();
+                                ),
+                              );
+                            }
+                            return const SizedBox.shrink();
                       },
-                    ),
-            ),
+                    );
+                },
+            ),),
             const SizedBox(height: 20),
-            ElevatedButton(
-                onPressed: () {
-                  exportToExcel(stockList); // stockList is your list of Stock objects
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () async {
+                  QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('products').get();
+                  List<Stock> stockList = snapshot.docs.map((doc) {
+                    return Stock(
+                      name: doc['name'],
+                      quantity: doc['quantity'],
+                      units: doc['units'],
+                      rate: doc['rate'],
+                      store: doc['store'],
+                    );
+                  }).toList();
+
+                  // Example logic to export stockList to Excel
+                  // You would need to implement the actual export logic here
+                  if (stockList.isNotEmpty) {
+                    // Call your export function here
+                    exportToExcel(stockList);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('No stock available to export.')),
+                    );
+                  }
                 },
                 child: const Text('Export to Excel'),
               ),
